@@ -4,36 +4,115 @@ import { useState } from "react";
 
 const data = [
 
-  // ---------------- ERROR DETECTION ----------------
-  {
-    topic: "crc",
-    category: "error detection",
-    content: "Cyclic Redundancy Check detects errors using polynomial division.",
-    code: `// CRC (basic example for CRC-4)
+  // ---------------- ERROR DETECTION (FULL SET) ----------------
+
+{
+  topic: "vrc",
+  category: "error detection",
+  content: "Vertical Redundancy Check adds a parity bit to detect single-bit errors.",
+  code: `// VRC (Parity Check)
+#include <stdio.h>
+
+int main() {
+    int data[4] = {1, 0, 1, 1};
+    int parity = 0;
+
+    for(int i = 0; i < 4; i++)
+        parity ^= data[i];
+
+    printf("Parity bit: %d\\n", parity);
+}`
+},
+
+{
+  topic: "lrc",
+  category: "error detection",
+  content: "Longitudinal Redundancy Check uses parity across rows (block check).",
+  code: `// LRC Example
+#include <stdio.h>
+
+int main() {
+    int data[3][4] = {
+        {1,0,1,1},
+        {0,1,0,1},
+        {1,1,1,0}
+    };
+
+    int lrc[4] = {0};
+
+    for(int j = 0; j < 4; j++) {
+        for(int i = 0; i < 3; i++) {
+            lrc[j] ^= data[i][j];
+        }
+    }
+
+    printf("LRC: ");
+    for(int i = 0; i < 4; i++)
+        printf("%d ", lrc[i]);
+}`
+},
+
+{
+  topic: "checksum",
+  category: "error detection",
+  content: "Checksum adds data segments and sends the complement for error detection.",
+  code: `// Checksum Example
+#include <stdio.h>
+
+int main() {
+    int data[] = {100, 200, 300};
+    int sum = 0;
+
+    for(int i = 0; i < 3; i++)
+        sum += data[i];
+
+    int checksum = ~sum;
+
+    printf("Checksum: %d\\n", checksum);
+}`
+},
+
+{
+  topic: "crc full",
+  category: "error detection",
+  content: "CRC uses binary division with a generator polynomial to detect burst errors.",
+  code: `// CRC Full Example
 #include <stdio.h>
 #include <string.h>
 
-#define POLYNOMIAL 0x3  // x^3 + x + 1
+void xor(char *a, char *b) {
+    for(int i = 1; i < strlen(b); i++)
+        a[i] = (a[i] == b[i]) ? '0' : '1';
+}
 
-unsigned char crc4(unsigned char data) {
-    unsigned char crc = 0;
-    crc ^= data;
-    for (int i = 0; i < 8; i++) {
-        if (crc & 0x8) {
-            crc = (crc << 1) ^ POLYNOMIAL;
-        } else {
-            crc <<= 1;
+void crc(char *data, char *key) {
+    int k = strlen(key);
+    char temp[20];
+    strncpy(temp, data, k);
+
+    for(int i = k; i < strlen(data); i++) {
+        if(temp[0] == '1')
+            xor(temp, key);
+        else {
+            char zeros[k];
+            for(int j = 0; j < k; j++) zeros[j] = '0';
+            xor(temp, zeros);
         }
+
+        memmove(temp, temp+1, k-1);
+        temp[k-1] = data[i];
     }
-    return crc & 0xF;
+
+    printf("CRC Remainder: %s\\n", temp);
 }
 
 int main() {
-    unsigned char data = 0xA;  // 1010
-    unsigned char crc = crc4(data);
-    printf("Data: 0x%X, CRC: 0x%X\\n", data, crc);
-    return 0;
+    char data[20] = "11010011101100";
+    char key[20] = "1011";
+
+    crc(data, key);
 }`
+
   },
 
   // ---------------- ERROR CORRECTION ----------------
@@ -43,169 +122,437 @@ int main() {
     content: "Hamming code detects and corrects single-bit errors.",
     code: `// Hamming Code (7,4) - basic implementation
 #include <stdio.h>
+#include <math.h>
 
-int calculateParity(int data[], int parityPos) {
+// Function to calculate parity bits
+int calculateParity(int data[], int n, int parityPos) {
     int parity = 0;
-    for (int i = parityPos - 1; i < 7; i += parityPos * 2) {
-        for (int j = 0; j < parityPos && i + j < 7; j++) {
-            if (i + j != parityPos - 1) {
-                parity ^= data[i + j];
-            }
+    for (int i = 1; i <= n; i++) {
+        if (i & parityPos) {
+            parity ^= data[i];
         }
     }
     return parity;
 }
 
-void encodeHamming(int data[4], int encoded[7]) {
-    // Positions: 1 2 3 4 5 6 7
-    // Data bits:   d1 d2 d3
-    // Parity: p1   p2   p4
-    encoded[2] = data[0]; // d1
-    encoded[4] = data[1]; // d2
-    encoded[5] = data[2]; // d3
-    encoded[6] = data[3]; // d4
-
-    encoded[0] = calculateParity(encoded, 1); // p1
-    encoded[1] = calculateParity(encoded, 2); // p2
-    encoded[3] = calculateParity(encoded, 4); // p4
-}
-
 int main() {
-    int data[4] = {1, 0, 1, 1}; // 4 data bits
-    int encoded[7] = {0};
-    encodeHamming(data, encoded);
-    printf("Encoded: ");
-    for (int i = 0; i < 7; i++) printf("%d", encoded[i]);
-    printf("\\n");
+    int choice;
+
+    printf("1. Sender\n2. Receiver\nEnter choice: ");
+    scanf("%d", &choice);
+
+    // ---------------- SENDER ----------------
+    if (choice == 1) {
+        int m;
+        printf("Enter number of data bits: ");
+        scanf("%d", &m);
+
+        int r = 0;
+        while (pow(2, r) < (m + r + 1))
+            r++;
+
+        int n = m + r;
+        int data[50];
+
+        printf("Enter data bits:\n");
+        for (int i = 1; i <= m; i++) {
+            scanf("%d", &data[i]);
+        }
+
+        int hamming[50];
+        int j = 1, k = 1;
+
+        // Place data and parity positions
+        for (int i = 1; i <= n; i++) {
+            if (i == pow(2, j - 1)) {
+                hamming[i] = 0;
+                j++;
+            } else {
+                hamming[i] = data[k++];
+            }
+        }
+
+        // Calculate parity bits
+        for (int i = 0; i < r; i++) {
+            int pos = pow(2, i);
+            hamming[pos] = calculateParity(hamming, n, pos);
+        }
+
+        printf("Encoded Hamming Code:\n");
+        for (int i = 1; i <= n; i++) {
+            printf("%d ", hamming[i]);
+        }
+        printf("\n");
+    }
+
+    // ---------------- RECEIVER ----------------
+    else if (choice == 2) {
+        int n;
+        printf("Enter number of bits received: ");
+        scanf("%d", &n);
+
+        int data[50];
+        printf("Enter received bits:\n");
+        for (int i = 1; i <= n; i++) {
+            scanf("%d", &data[i]);
+        }
+
+        int r = 0;
+        while (pow(2, r) <= n)
+            r++;
+
+        int errorPos = 0;
+
+        // Check parity
+        for (int i = 0; i < r; i++) {
+            int pos = pow(2, i);
+            int parity = calculateParity(data, n, pos);
+            if (parity != 0) {
+                errorPos += pos;
+            }
+        }
+
+        if (errorPos == 0) {
+            printf("No error detected.\n");
+        } else {
+            printf("Error detected at position: %d\n", errorPos);
+
+            // Correct the error
+            data[errorPos] ^= 1;
+
+            printf("Corrected data:\n");
+            for (int i = 1; i <= n; i++) {
+                printf("%d ", data[i]);
+            }
+            printf("\n");
+        }
+    }
+
+    else {
+        printf("Invalid choice\n");
+    }
+
     return 0;
 }`
   },
 
-  // ---------------- SOCKET PROGRAMMING ----------------
-  {
-    topic: "tcp server",
-    category: "socket programming",
-    content: "Basic TCP server using sockets in C.",
-    code: `// TCP Server
+// ---------------- TCP MATH PROGRAM ----------------
+
+{
+  topic: "tcp math server",
+  category: "socket programming",
+  content: "Server performs arithmetic operations based on client input.",
+  code: `// TCP Math Server
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    char buffer[1024] = {0};
-    char *hello = "Hello from server";
-
-    // Create socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Bind to port 8080
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(8080);
-
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Listen
-    if (listen(server_fd, 3) < 0) {
-        perror("listen failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Accept connection
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-        perror("accept failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Read and respond
-    read(new_socket, buffer, 1024);
-    printf("Message: %s\\n", buffer);
-    send(new_socket, hello, strlen(hello), 0);
-
-    close(new_socket);
-    close(server_fd);
-    return 0;
-}`
-  },
-
-  {
-    topic: "tcp client",
-    category: "socket programming",
-    content: "Basic TCP client using sockets.",
-    code: `// TCP Client
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define PORT 8080
+int main() {
+    int sockfd, newsockfd;
+    struct sockaddr_in server, client;
+    socklen_t len;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8080);
+    server.sin_addr.s_addr = INADDR_ANY;
+
+    bind(sockfd, (struct sockaddr*)&server, sizeof(server));
+    listen(sockfd, 5);
+
+    len = sizeof(client);
+    newsockfd = accept(sockfd, (struct sockaddr*)&client, &len);
+
+    int a, b, result;
+    char op;
+
+    recv(newsockfd, &a, sizeof(a), 0);
+    recv(newsockfd, &b, sizeof(b), 0);
+    recv(newsockfd, &op, sizeof(op), 0);
+
+    switch(op) {
+        case '+': result = a + b; break;
+        case '-': result = a - b; break;
+        case '*': result = a * b; break;
+        case '/': result = (b != 0) ? a / b : 0; break;
+    }
+
+    send(newsockfd, &result, sizeof(result), 0);
+
+    close(newsockfd);
+    close(sockfd);
+}`
+},
+
+{
+  topic: "tcp math client",
+  category: "socket programming",
+  content: "Client sends numbers and operator to server and receives result.",
+  code: `// TCP Math Client
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 int main() {
-    int sock = 0;
-    struct sockaddr_in serv_addr;
-    char *hello = "Hello from client";
-    char buffer[1024] = {0};
+    int sockfd;
+    struct sockaddr_in server;
 
-    // Create socket
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("\\n Socket creation error \\n");
-        return -1;
-    }
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8080);
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    // Convert IPv4 address from text to binary
-    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
-        printf("\\nInvalid address/ Address not supported \\n");
-        return -1;
-    }
+    connect(sockfd, (struct sockaddr*)&server, sizeof(server));
 
-    // Connect
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\\nConnection Failed \\n");
-        return -1;
-    }
+    int a, b;
+    char op;
 
-    // Send and receive
-    send(sock, hello, strlen(hello), 0);
-    read(sock, buffer, 1024);
-    printf("Message from server: %s\\n", buffer);
+    scanf("%d %d", &a, &b);
+    scanf(" %c", &op);
 
-    close(sock);
-    return 0;
+    send(sockfd, &a, sizeof(a), 0);
+    send(sockfd, &b, sizeof(b), 0);
+    send(sockfd, &op, sizeof(op), 0);
+
+    int result;
+    recv(sockfd, &result, sizeof(result), 0);
+
+    printf("Result: %d\\n", result);
+
+    close(sockfd);
 }`
-  },
+},
 
-  // ---------------- TCP PROGRAMS ----------------
-  {
-    topic: "tcp math server client",
-    category: "lab programs",
-    content: "Client sends numbers, server performs operations.",
-    code: `// Simplified logic
-// send numbers -> server calculates -> returns result`
-  },
+// ---------------- TCP CHAT PROGRAM ----------------
 
-  {
-    topic: "tcp chat program",
-    category: "lab programs",
-    content: "Two-way communication between client and server.",
-    code: `// Chat using send() and recv()`
-  },
+{
+  topic: "tcp chat server",
+  category: "socket programming",
+  content: "Server handles two-way communication with client.",
+  code: `// TCP Chat Server
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+int main() {
+    int sockfd, newsockfd;
+    struct sockaddr_in server, client;
+    socklen_t len;
+    char buffer[1024];
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8080);
+    server.sin_addr.s_addr = INADDR_ANY;
+
+    bind(sockfd, (struct sockaddr*)&server, sizeof(server));
+    listen(sockfd, 5);
+
+    len = sizeof(client);
+    newsockfd = accept(sockfd, (struct sockaddr*)&client, &len);
+
+    while (1) {
+        recv(newsockfd, buffer, sizeof(buffer), 0);
+        printf("Client: %s\\n", buffer);
+
+        if (strncmp(buffer, "exit", 4) == 0)
+            break;
+
+        fgets(buffer, sizeof(buffer), stdin);
+        send(newsockfd, buffer, strlen(buffer), 0);
+    }
+
+    close(newsockfd);
+    close(sockfd);
+}`
+},
+
+{
+  topic: "tcp chat client",
+  category: "socket programming",
+  content: "Client sends and receives messages from server.",
+  code: `// TCP Chat Client
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+int main() {
+    int sockfd;
+    struct sockaddr_in server;
+    char buffer[1024];
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8080);
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    connect(sockfd, (struct sockaddr*)&server, sizeof(server));
+
+    while (1) {
+        fgets(buffer, sizeof(buffer), stdin);
+        send(sockfd, buffer, strlen(buffer), 0);
+
+        if (strncmp(buffer, "exit", 4) == 0)
+            break;
+
+        recv(sockfd, buffer, sizeof(buffer), 0);
+        printf("Server: %s\\n", buffer);
+    }
+
+    close(sockfd);
+}`
+},
+
+// ---------------- STOP AND WAIT ----------------
+
+{
+  topic: "stop and wait arq",
+  category: "flow control",
+  content: "Stop-and-Wait sends one frame at a time and waits for ACK. Retransmits on loss.",
+  code: `// Stop-and-Wait ARQ (Simulation using sockets)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <time.h>
+
+int main() {
+    int sockfd, newsockfd;
+    struct sockaddr_in server, client;
+    socklen_t len;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8080);
+    server.sin_addr.s_addr = INADDR_ANY;
+
+    bind(sockfd, (struct sockaddr*)&server, sizeof(server));
+    listen(sockfd, 5);
+
+    len = sizeof(client);
+    newsockfd = accept(sockfd, (struct sockaddr*)&client, &len);
+
+    int frames;
+    printf("Enter number of frames: ");
+    scanf("%d", &frames);
+
+    send(newsockfd, &frames, sizeof(frames), 0);
+
+    srand(time(0));
+
+    for(int i = 1; i <= frames; i++) {
+        printf("Sending frame %d\\n", i);
+
+        int loss = rand() % 2;
+
+        if(loss) {
+            printf("Frame %d lost. Retransmitting...\\n", i);
+            i--; // resend
+        } else {
+            printf("Frame %d received. ACK sent\\n", i);
+        }
+    }
+
+    close(newsockfd);
+    close(sockfd);
+}`
+},
+
+// ---------------- GO BACK N ----------------
+
+{
+  topic: "go back n arq",
+  category: "flow control",
+  content: "Go-Back-N sends multiple frames. On error, retransmits from lost frame.",
+  code: `// Go-Back-N ARQ
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+int main() {
+    int frames, window;
+
+    printf("Enter number of frames: ");
+    scanf("%d", &frames);
+
+    printf("Enter window size: ");
+    scanf("%d", &window);
+
+    srand(time(0));
+
+    int i = 1;
+
+    while(i <= frames) {
+        for(int j = 0; j < window && i + j <= frames; j++) {
+            printf("Sending frame %d\\n", i + j);
+        }
+
+        int ack = rand() % window;
+
+        if(ack == 0) {
+            printf("Error occurred. Retransmitting from frame %d\\n", i);
+        } else {
+            printf("ACK received till frame %d\\n", i + ack - 1);
+            i = i + ack;
+        }
+    }
+}`
+},
+
+// ---------------- SELECTIVE REPEAT ----------------
+
+{
+  topic: "selective repeat arq",
+  category: "flow control",
+  content: "Selective Repeat retransmits only the lost frames.",
+  code: `// Selective Repeat ARQ
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+int main() {
+    int frames, window;
+
+    printf("Enter number of frames: ");
+    scanf("%d", &frames);
+
+    printf("Enter window size: ");
+    scanf("%d", &window);
+
+    int received[100] = {0};
+
+    srand(time(0));
+
+    for(int i = 1; i <= frames; i++) {
+        int loss = rand() % 2;
+
+        if(loss) {
+            printf("Frame %d lost\\n", i);
+        } else {
+            printf("Frame %d received\\n", i);
+            received[i] = 1;
+        }
+    }
+
+    printf("Retransmitting lost frames:\\n");
+
+    for(int i = 1; i <= frames; i++) {
+        if(!received[i]) {
+            printf("Retransmitting frame %d\\n", i);
+        }
+    }
+}`
+},
 
   // ---------------- ROUTING ----------------
   {
@@ -311,29 +658,310 @@ int main() {
     code: "Used in TCP"
   },
 
-  // ---------------- WIRESHARK ----------------
-  {
-    topic: "wireshark",
-    category: "tools",
-    content: "Packet analyzer used to inspect network traffic.",
-    code: "Steps: capture → filter → analyze packets"
-  },
+// ---------------- WIRESHARK GENERAL STEPS ----------------
 
-  // ---------------- IP ADDRESS ----------------
-  {
-    topic: "ip address",
-    category: "networking basics",
-    content: "IPv4 is 32-bit, divided into network and host parts.",
-    code: "Example: 192.168.1.1"
-  },
+{
+  topic: "wireshark general steps",
+  category: "network tools",
+  content: `
+Wireshark is a packet analyzer used to capture and analyze network traffic.
+
+Basic Steps:
+1. Open Wireshark
+2. Select network interface (Wi-Fi / Ethernet)
+3. Start packet capture
+4. Perform network activity (open website, ping, etc.)
+5. Stop capture
+6. Apply filters to analyze specific packets
+7. Inspect packet details (headers, flags, data)
+8. Use statistics tools for deeper analysis
+`,
+  code: "Tool-based procedure"
+},
+
+{
+  topic: "wireshark filters",
+  category: "network tools",
+  content: `
+Common Filters:
+
+tcp → TCP packets  
+udp → UDP packets  
+icmp → ICMP packets  
+arp → ARP packets  
+dns → DNS packets  
+http → HTTP traffic  
+
+tcp.flags.syn == 1 → SYN packets  
+tcp.flags.fin == 1 → FIN packets  
+tcp.flags.reset == 1 → RST packets  
+
+tcp.stream == N → specific TCP conversation
+`,
+  code: "Filter reference"
+},
+
+{
+  topic: "wireshark tcp analysis",
+  category: "network tools",
+  content: `
+Steps to analyze TCP:
+
+1. Capture packets
+2. Apply filter: tcp
+3. Identify 3-way handshake:
+   SYN → SYN-ACK → ACK
+4. Identify termination:
+   FIN → ACK → FIN → ACK
+5. Use "Follow TCP Stream" to see full communication
+6. Check sequence and acknowledgement numbers
+`,
+  code: "Procedure"
+},
+
+{
+  topic: "wireshark tools",
+  category: "network tools",
+  content: `
+Important Wireshark Tools:
+
+Statistics → Conversations (traffic summary)  
+Statistics → Flow Graph (packet flow visualization)  
+Statistics → I/O Graph (traffic over time)  
+Follow → TCP Stream (full session data)  
+Protocol Hierarchy (protocol distribution)
+`,
+  code: "Features"
+},
+// ---------------- IP FORMAT CONVERSION ----------------
+
+{
+  topic: "ip format conversion",
+  category: "ip addressing",
+  content: "Convert IPv4 between binary, decimal, and hexadecimal formats.",
+  code: `// IPv4 Format Conversion
+#include <stdio.h>
+#include <stdlib.h>
+
+void decimalToBinary(int n) {
+    for(int i = 7; i >= 0; i--)
+        printf("%d", (n >> i) & 1);
+}
+
+int main() {
+    int a, b, c, d;
+    printf("Enter IPv4 (decimal format a.b.c.d): ");
+    scanf("%d.%d.%d.%d", &a, &b, &c, &d);
+
+    printf("Binary: ");
+    decimalToBinary(a); printf(".");
+    decimalToBinary(b); printf(".");
+    decimalToBinary(c); printf(".");
+    decimalToBinary(d);
+
+    printf("\\nHexadecimal: %X.%X.%X.%X\\n", a, b, c, d);
+}`
+},
+// ---------------- SUBNET CALCULATOR ----------------
+
+{
+  topic: "subnet calculation",
+  category: "ip addressing",
+  content: "Calculates subnet details for classful and classless addressing.",
+  code: `#include <stdio.h>
+#include <math.h>
+
+int main() {
+    int ip[4], maskBits, subnets;
+
+    printf("Enter IP (a.b.c.d): ");
+    scanf("%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
+
+    printf("Enter subnet mask bits (CIDR): ");
+    scanf("%d", &maskBits);
+
+    printf("Enter number of subnets: ");
+    scanf("%d", &subnets);
+
+    int totalHosts = pow(2, (32 - maskBits));
+    int hostsPerSubnet = totalHosts / subnets;
+
+    printf("\\nTotal Addresses: %d\\n", totalHosts);
+    printf("Hosts per subnet: %d\\n", hostsPerSubnet);
+
+    printf("\\nSubnet Details:\\n");
+
+    for(int i = 0; i < subnets; i++) {
+        printf("\\nSubnet %d:\\n", i+1);
+
+        printf("Network ID: %d.%d.%d.%d\\n", ip[0], ip[1], ip[2], ip[3] + i*hostsPerSubnet);
+        printf("First Address: %d.%d.%d.%d\\n", ip[0], ip[1], ip[2], ip[3] + i*hostsPerSubnet + 1);
+        printf("Last Address: %d.%d.%d.%d\\n", ip[0], ip[1], ip[2], ip[3] + (i+1)*hostsPerSubnet - 2);
+        printf("Broadcast: %d.%d.%d.%d\\n", ip[0], ip[1], ip[2], ip[3] + (i+1)*hostsPerSubnet - 1);
+    }
+}`
+},
+{
+  topic: "ip class identification",
+  category: "ip addressing",
+  content: `
+Class A: 0-127  
+Class B: 128-191  
+Class C: 192-223  
+Class D: 224-239 (Multicast)  
+Class E: 240-255 (Reserved)
+`,
+  code: `// Class Identification
+#include <stdio.h>
+
+int main() {
+    int first;
+    printf("Enter first octet: ");
+    scanf("%d", &first);
+
+    if(first <= 127) printf("Class A");
+    else if(first <= 191) printf("Class B");
+    else if(first <= 223) printf("Class C");
+    else if(first <= 239) printf("Class D");
+    else printf("Class E");
+}`
+},
+{
+  topic: "classless addressing",
+  category: "ip addressing",
+  content: `
+Classless (CIDR): uses flexible subnet masks (/24, /26, etc.)  
+Classful: fixed classes (A, B, C)
+
+Subnet mask: defines network vs host bits  
+Network ID: identifies network  
+Host ID: identifies device  
+Broadcast: last address in subnet
+`,
+  code: "Theory"
+},
 
   // ---------------- PACKET TRACER ----------------
-  {
-    topic: "packet tracer",
-    category: "tools",
-    content: "Cisco simulation tool to design networks.",
-    code: "Used for topology + routing simulation"
-  }
+// ---------------- PACKET TRACER BASIC COMMANDS ----------------
+
+{
+  topic: "packet tracer basic commands",
+  category: "network tools",
+  content: `
+Basic router/switch CLI commands used in Cisco Packet Tracer.
+`,
+  code: `enable
+configure terminal
+
+hostname Router1
+
+interface g0/0
+ip address 192.168.1.1 255.255.255.0
+no shutdown
+exit
+
+interface g0/1
+ip address 192.168.2.1 255.255.255.0
+no shutdown
+exit
+
+show ip interface brief
+show running-config
+`
+},
+{
+  topic: "packet tracer static routing",
+  category: "routing",
+  content: "Configure static routes between networks.",
+  code: `ip route 192.168.2.0 255.255.255.0 192.168.1.2
+
+// Format:
+ip route <destination_network> <subnet_mask> <next_hop_ip>`
+},
+
+{
+  topic: "rip routing commands",
+  category: "routing",
+  content: "Configure RIP (Routing Information Protocol).",
+  code: `router rip
+version 2
+network 192.168.1.0
+network 192.168.2.0
+no auto-summary`
+},
+
+{
+  topic: "ospf routing commands",
+  category: "routing",
+  content: "Configure OSPF routing protocol.",
+  code: `router ospf 1
+network 192.168.1.0 0.0.0.255 area 0
+network 192.168.2.0 0.0.0.255 area 0`
+},
+
+{
+  topic: "vlan configuration",
+  category: "switching",
+  content: "Create VLAN and assign ports.",
+  code: `vlan 10
+name SALES
+
+interface fa0/1
+switchport mode access
+switchport access vlan 10
+
+show vlan brief`
+},
+
+{
+  topic: "vlan configuration",
+  category: "switching",
+  content: "Create VLAN and assign ports.",
+  code: `vlan 10
+name SALES
+
+interface fa0/1
+switchport mode access
+switchport access vlan 10
+
+show vlan brief`
+},
+
+{
+  topic: "packet tracer testing commands",
+  category: "network tools",
+  content: "Commands used to verify connectivity.",
+  code: `ping 192.168.1.2
+tracert 192.168.2.1
+
+show ip route
+show ip protocols`
+},
+
+{
+  topic: "packet tracer testing commands",
+  category: "network tools",
+  content: "Commands used to verify connectivity.",
+  code: `ping 192.168.1.2
+tracert 192.168.2.1
+
+show ip route
+show ip protocols`
+},
+
+{
+  topic: "packet tracer workflow",
+  category: "network tools",
+  content: `
+1. Create topology (routers, switches, PCs)
+2. Assign IP addresses
+3. Configure interfaces (no shutdown)
+4. Add routing (static / RIP / OSPF)
+5. Test using ping
+6. Debug using show commands
+`,
+  code: "Procedure"
+}
 
 ];
 
@@ -341,9 +969,9 @@ export default function Home() {
   const [query, setQuery] = useState("");
 
   const filtered = data.filter(item =>
-    (item.topic + " " + item.category + " " + item.content)
-      .toLowerCase()
-      .includes(query.toLowerCase())
+(item.topic + item.category + item.content + item.code)
+  .toLowerCase()
+  .includes(query.toLowerCase())
   );
 
   return (
